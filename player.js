@@ -101,8 +101,13 @@ function stopPlayer() {
 
 window.closePlayerBox = function() {
     stopPlayer();
+    
+    // Reset Settings Menu
     const menu = document.getElementById("settingsMenu");
-    if (menu) menu.classList.remove("show");
+    if (menu && !menu.classList.contains("translate-x-full")) {
+        menu.classList.add("translate-x-full");
+    }
+
     if (typeof closeInlinePdfAndReset === "function") {
         closeInlinePdfAndReset();
     }
@@ -206,8 +211,13 @@ function start() {
     }
 }
 
+// =====================================================
+// DYNAMIC SETTINGS & SLIDER MENU UI LOGIC
+// =====================================================
+
 function populateQualitySettings(hlsLevels) {
     const qList = document.getElementById("qualityList");
+    const qLabel = document.getElementById("currentQualityLabel");
     if (!qList) return;
 
     const activeInfo = (typeof state !== "undefined" && state.activeKey && state.mediaMap) ? state.mediaMap[state.activeKey] : null;
@@ -215,79 +225,236 @@ function populateQualitySettings(hlsLevels) {
     const serverKeys = Object.keys(serverQualsObj);
 
     let html = "";
+    let activeLabel = "Auto";
 
     if (serverKeys.length > 0) {
         const currentRaw = unwrapOriginalUrl(input.value);
         serverKeys.forEach((qKey, idx) => {
             const targetRaw = unwrapOriginalUrl(serverQualsObj[qKey]);
             const isAct = (currentRaw && targetRaw && currentRaw === targetRaw) || (!currentRaw && idx === 0);
-            html += `<div class="q-option ${isAct ? 'active' : ''}" onclick="switchServerQuality('${qKey.replace(/'/g, "")}', this)">${qKey}</div>`;
+            if (isAct) activeLabel = qKey;
+            
+            html += `
+                <div class="p-2 rounded-lg cursor-pointer text-center ${isAct ? 'bg-white/20 active-qual' : 'hover:bg-white/10'}" 
+                     onclick="switchServerQuality('${qKey.replace(/'/g, "")}')">
+                    ${qKey}
+                </div>`;
         });
     } else if (hlsLevels && hlsLevels.length > 1) {
-        html += `<div class="q-option active" onclick="changeHlsLevel(-1, this)">Auto</div>`;
+        html += `<div class="p-2 rounded-lg cursor-pointer text-center bg-white/20 active-qual" onclick="changeHlsLevel(-1)">Auto</div>`;
         const seenHeights = new Set();
         hlsLevels.forEach((lvl, idx) => {
             let label = lvl.height ? `${lvl.height}p` : `${idx + 1}p`;
             if (!seenHeights.has(label)) {
                 seenHeights.add(label);
-                html += `<div class="q-option" onclick="changeHlsLevel(${idx}, this)">${label}</div>`;
+                html += `<div class="p-2 rounded-lg cursor-pointer text-center hover:bg-white/10" onclick="changeHlsLevel(${idx}, '${label}')">${label}</div>`;
             }
         });
     } else {
-        html = `<div class="q-option active" onclick="toggleSettingsMenu()">720p HD</div>`;
+        activeLabel = "720p HD";
+        html = `<div class="p-2 rounded-lg cursor-pointer text-center bg-white/20 active-qual">720p HD</div>`;
     }
 
     qList.innerHTML = html;
+    if (qLabel) qLabel.textContent = activeLabel + " ❯";
 }
 
-window.changeHlsLevel = function(idx, el) {
+window.changeHlsLevel = function(idx, label = 'Auto') {
     if (hls) hls.currentLevel = idx;
-    document.querySelectorAll("#qualityList .q-option").forEach(o => o.classList.remove("active"));
-    if (el) el.classList.add("active");
-    toggleSettingsMenu();
+    
+    // Update UI active state
+    document.querySelectorAll("#qualityList > div").forEach(o => {
+        o.classList.remove("bg-white/20", "active-qual");
+        o.classList.add("hover:bg-white/10");
+        if(o.textContent.includes(label)) {
+            o.classList.add("bg-white/20", "active-qual");
+            o.classList.remove("hover:bg-white/10");
+        }
+    });
+
+    const qLabel = document.getElementById("currentQualityLabel");
+    if(qLabel) qLabel.textContent = label + " ❯";
+    
+    closeSubMenu();
 };
 
-window.switchServerQuality = function(qKey, el) {
+window.switchServerQuality = function(qKey) {
     resumeSeekTime = v ? v.currentTime : 0;
-    document.querySelectorAll("#qualityList .q-option").forEach(o => o.classList.remove("active"));
-    if (el) el.classList.add("active");
-    toggleSettingsMenu();
+    
+    // Update UI Active State immediately
+    document.querySelectorAll("#qualityList > div").forEach(o => {
+        o.classList.remove("bg-white/20", "active-qual");
+        o.classList.add("hover:bg-white/10");
+        if(o.textContent.includes(qKey)) {
+            o.classList.add("bg-white/20", "active-qual");
+            o.classList.remove("hover:bg-white/10");
+        }
+    });
+
+    const qLabel = document.getElementById("currentQualityLabel");
+    if(qLabel) qLabel.textContent = qKey + " ❯";
+    
+    closeSubMenu();
+    toggleSettingsMenu(); // Close entire settings menu on change
+    
     if (typeof changeLectureQuality === "function") {
-        changeLectureQuality(qKey, resumeSeekTime);
+        changeLectureQuality(qKey);
     }
 };
 
-window.changeSpd = function(rate, el) {
-    if (v) v.playbackRate = rate;
-    document.querySelectorAll(".spd-option").forEach(o => o.classList.remove("active"));
-    if (el) el.classList.add("active");
-    toggleSettingsMenu();
-};
-
+// --- MENU TOGGLES ---
 window.toggleSettingsMenu = function() {
     const menu = document.getElementById("settingsMenu");
-    if (menu) menu.classList.toggle("show");
+    if (menu) {
+        if (menu.classList.contains("translate-x-full")) {
+            menu.classList.remove("translate-x-full");
+            closeSubMenu(); // Always open root first
+        } else {
+            menu.classList.add("translate-x-full");
+        }
+    }
 };
 
-// TAP-TO-TOGGLE CONTROLS VISIBILITY LOGIC
-const hlsScreen = document.getElementById("hlsScreen");
-const playerControlsBar = document.getElementById("playerControlsBar");
+window.openSubMenu = function(menuId) {
+    document.getElementById("settingsRoot").classList.add("hidden");
+    document.getElementById("settingsRoot").classList.remove("flex");
+    
+    document.getElementById("qualityMenu").classList.add("hidden");
+    document.getElementById("qualityMenu").classList.remove("flex");
+    
+    document.getElementById("speedMenu").classList.add("hidden");
+    document.getElementById("speedMenu").classList.remove("flex");
+    
+    const target = document.getElementById(menuId);
+    if(target) {
+        target.classList.remove("hidden");
+        target.classList.add("flex");
+    }
+};
 
-if (hlsScreen) {
-    hlsScreen.addEventListener("click", (e) => {
-        // Prevent toggle if clicking directly on buttons or settings menu
-        if (e.target.closest("button") || e.target.closest("input") || e.target.closest("#settingsMenu")) {
-            return;
-        }
-        if (playerControlsBar) {
-            playerControlsBar.classList.toggle("hidden-controls");
-        }
-        const menu = document.getElementById("settingsMenu");
-        if (menu && menu.classList.contains("show")) {
-            menu.classList.remove("show");
+window.closeSubMenu = function() {
+    document.getElementById("qualityMenu").classList.add("hidden");
+    document.getElementById("qualityMenu").classList.remove("flex");
+    
+    document.getElementById("speedMenu").classList.add("hidden");
+    document.getElementById("speedMenu").classList.remove("flex");
+    
+    const root = document.getElementById("settingsRoot");
+    if(root) {
+        root.classList.remove("hidden");
+        root.classList.add("flex");
+    }
+};
+
+// --- SPEED CONTROL (SLIDER & BUTTONS) ---
+function updateSpeedUI(rate) {
+    const sSlider = document.getElementById("speedSlider");
+    const sDisplay = document.getElementById("speedDisplayVal");
+    const sLabel = document.getElementById("currentSpeedLabel");
+
+    if(sSlider) sSlider.value = rate;
+    if(sDisplay) sDisplay.textContent = rate + "x";
+    if(sLabel) sLabel.textContent = rate + "x ❯";
+
+    document.querySelectorAll(".spd-option").forEach(el => {
+        if(el.textContent.trim() === rate + "x" || el.textContent.trim() === rate + ".0x") {
+            el.classList.add("bg-white/20");
+            el.classList.remove("hover:bg-white/10");
+        } else {
+            el.classList.remove("bg-white/20");
+            el.classList.add("hover:bg-white/10");
         }
     });
 }
+
+window.changeSpd = function(rate) {
+    if (v) v.playbackRate = rate;
+    updateSpeedUI(rate);
+};
+
+window.adjustSpeed = function(delta) {
+    const slider = document.getElementById("speedSlider");
+    if(slider) {
+        let current = parseFloat(slider.value) || 1.0;
+        let next = current + delta;
+        if(next >= 0.25 && next <= 4.0) {
+            if(v) v.playbackRate = next;
+            updateSpeedUI(next);
+        }
+    }
+};
+
+const sliderEl = document.getElementById("speedSlider");
+if(sliderEl) {
+    sliderEl.addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        if(v) v.playbackRate = val;
+        updateSpeedUI(val);
+    });
+}
+
+// =====================================================
+// SMART AUTO-HIDE CONTROLS (Screen Tap Logic)
+// =====================================================
+let controlsTimeout;
+
+function showControls() {
+    const topBar = document.getElementById("playerHeaderBar");
+    const centerCtrl = document.getElementById("centerControls");
+    const bottomBar = document.getElementById("playerControlsBar");
+
+    if (topBar) topBar.classList.remove("opacity-0");
+    if (centerCtrl) centerCtrl.classList.remove("opacity-0", "pointer-events-none");
+    if (bottomBar) bottomBar.classList.remove("opacity-0");
+
+    resetControlsTimeout();
+}
+
+function hideControls() {
+    // Only hide if video is actually playing and settings menu is closed
+    const menu = document.getElementById("settingsMenu");
+    const isMenuOpen = menu && !menu.classList.contains("translate-x-full");
+
+    if (!v.paused && !isMenuOpen) {
+        const topBar = document.getElementById("playerHeaderBar");
+        const centerCtrl = document.getElementById("centerControls");
+        const bottomBar = document.getElementById("playerControlsBar");
+
+        if (topBar) topBar.classList.add("opacity-0");
+        if (centerCtrl) centerCtrl.classList.add("opacity-0", "pointer-events-none");
+        if (bottomBar) bottomBar.classList.add("opacity-0");
+    }
+}
+
+function resetControlsTimeout() {
+    clearTimeout(controlsTimeout);
+    controlsTimeout = setTimeout(hideControls, 3500);
+}
+
+// Bind tap/mouse events to video container
+const videoContainer = document.getElementById("videoContainer");
+if (videoContainer) {
+    videoContainer.addEventListener("mousemove", showControls);
+    videoContainer.addEventListener("click", (e) => {
+        // Prevent hiding if clicking on actual buttons/sliders
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.closest('#settingsMenu')) {
+            return;
+        }
+        
+        const centerCtrl = document.getElementById("centerControls");
+        // Toggle visibility manually on click
+        if (centerCtrl && centerCtrl.classList.contains("opacity-0")) {
+            showControls();
+        } else {
+            hideControls();
+        }
+    });
+}
+
+
+// =====================================================
+// VIDEO CORE CONTROLS & DOWNLOADER
+// =====================================================
 
 async function downloadMerged() {
     const raw = input ? unwrapOriginalUrl(input.value.trim()) : "";
@@ -296,7 +463,11 @@ async function downloadMerged() {
     const box = document.getElementById("downloadBox");
     const text = document.getElementById("downloadText");
     const bar = document.getElementById("bar");
-    if (box) box.classList.add("show");
+    
+    if (box) {
+        box.classList.remove("hidden");
+        box.classList.add("block");
+    }
     if (bar) bar.style.width = "2%";
     if (text) text.textContent = "Preparing video segments...";
 
@@ -342,7 +513,13 @@ async function downloadMerged() {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(finalUrl), 60000);
         if (text) text.textContent = "✅ Download Complete!";
-        setTimeout(() => { if (box) box.classList.remove("show"); }, 4000);
+        
+        setTimeout(() => { 
+            if (box) {
+                box.classList.add("hidden");
+                box.classList.remove("block");
+            } 
+        }, 4000);
     } catch (e) {
         if (text) text.textContent = "⚠️ Download error: " + e.message;
     }
@@ -358,46 +535,48 @@ function fmt(x) {
 }
 
 const toggleBtn = document.getElementById("toggle");
-if (toggleBtn) toggleBtn.onclick = () => v.paused ? v.play() : v.pause();
+if (toggleBtn) toggleBtn.onclick = () => {
+    v.paused ? v.play() : v.pause();
+    showControls(); // Show controls when pausing/playing
+};
 
-v.onplay = () => { if (toggleBtn) toggleBtn.textContent = "⏸"; showLoader(false); };
-v.onpause = () => { if (toggleBtn) toggleBtn.textContent = "▶"; };
+v.onplay = () => { 
+    if (toggleBtn) toggleBtn.innerHTML = "⏸"; 
+    showLoader(false); 
+    resetControlsTimeout();
+};
+v.onpause = () => { 
+    if (toggleBtn) toggleBtn.innerHTML = "▶"; 
+    showControls(); // Keep controls visible when paused
+};
 v.onwaiting = () => showLoader(true);
 v.onplaying = () => showLoader(false);
 v.oncanplay = () => showLoader(false);
 
 const backBtn = document.getElementById("back");
-if (backBtn) backBtn.onclick = () => v.currentTime = Math.max(0, v.currentTime - 10);
+if (backBtn) backBtn.onclick = () => {
+    v.currentTime = Math.max(0, v.currentTime - 10);
+    showControls();
+};
 
 const nextBtn = document.getElementById("next");
-if (nextBtn) nextBtn.onclick = () => v.currentTime = Math.min(v.duration || Infinity, v.currentTime + 10);
-
-const muteBtn = document.getElementById("mute");
-if (muteBtn) muteBtn.onclick = () => {
-    v.muted = !v.muted;
-    muteBtn.textContent = v.muted ? "🔇" : "🔊";
+if (nextBtn) nextBtn.onclick = () => {
+    v.currentTime = Math.min(v.duration || Infinity, v.currentTime + 10);
+    showControls();
 };
 
 const dlBtn = document.getElementById("download");
 if (dlBtn) dlBtn.onclick = downloadMerged;
 
-const pipBtn = document.getElementById("pip");
-if (pipBtn) pipBtn.onclick = async () => {
-    try {
-        if (document.pictureInPictureElement) await document.exitPictureInPicture();
-        else if (v.requestPictureInPicture) await v.requestPictureInPicture();
-    } catch {}
-};
 
-// FULLSCREEN & MINIMIZE BUTTON LOGIC
+// FULLSCREEN LOGIC (AppX Style Fullscreen View)
 const fsBtn = document.getElementById("fs");
-const headerBar = document.getElementById("playerHeaderBar");
 
-if (fsBtn && hlsScreen) {
+if (fsBtn && videoContainer) {
     fsBtn.onclick = async () => {
         try {
             if (!document.fullscreenElement) {
-                await hlsScreen.requestFullscreen();
+                await videoContainer.requestFullscreen();
             } else {
                 await document.exitFullscreen();
             }
@@ -407,11 +586,9 @@ if (fsBtn && hlsScreen) {
 
 document.addEventListener("fullscreenchange", () => {
     if (document.fullscreenElement) {
-        if (headerBar) headerBar.classList.add("hidden");
-        if (fsBtn) fsBtn.textContent = "🗗";
+        if (fsBtn) fsBtn.innerHTML = "🗗";
     } else {
-        if (headerBar) headerBar.classList.remove("hidden");
-        if (fsBtn) fsBtn.textContent = "⛶";
+        if (fsBtn) fsBtn.innerHTML = "⛶";
     }
 });
 
@@ -425,5 +602,8 @@ v.ontimeupdate = () => {
 
 const seekEl = document.getElementById("seek");
 if (seekEl) seekEl.oninput = e => {
-    if (Number.isFinite(v.duration)) v.currentTime = e.target.value / 1000 * v.duration;
+    if (Number.isFinite(v.duration)) {
+        v.currentTime = e.target.value / 1000 * v.duration;
+        showControls();
+    }
 };
