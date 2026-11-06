@@ -47,8 +47,9 @@
             </div>
 
             <div class="flex items-center gap-2 flex-wrap">
-                <!-- NAYA REFRESH BUTTON -->
-                <button onclick="location.reload()" class="btn-nav bg-slate-800 text-white border-0">🔄 Refresh</button>
+                <!-- REFRESH APP BUTTON -->
+                <button onclick="forceAppRefresh()" class="btn-nav bg-purple-600 hover:bg-purple-700 text-white border-0 transition shadow-md">🔄 Refresh</button>
+                
                 <button onclick="openTestSeriesExplorer('paid_ts')" class="btn-nav bg-indigo-600 text-white border-0">🏆 Paid Tests</button>
                 <button onclick="openTestSeriesExplorer('free_ts')" class="btn-nav bg-teal-600 text-white border-0">📝 Free Tests</button>
                 <button onclick="openTokenSlide()" class="btn-nav bg-amber-500 text-white border-0">🔑 My Token (<span id="tokCountBadge">1</span>)</button>
@@ -147,24 +148,18 @@
         <!-- SLIDE 3: PLAYER SECTION -->
         <section id="slidePlayer" class="slide-page hidden-slide">
             <div class="max-w-5xl mx-auto">
-                
                 <input id="url" type="hidden" value="">
 
-                <div class="w-full shadow-2xl rounded-2xl overflow-hidden bg-black relative">
-                    <div id="hlsScreen" class="screen relative w-full aspect-video bg-black group">
-                        
-                        <!-- Top Bar (Title & Back Button inside video) -->
-                        <div id="playerTopBar" class="absolute top-0 left-0 w-full p-4 flex items-center gap-3 z-30 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300">
-                            <button onclick="closePlayerBox()" class="text-white font-bold text-2xl drop-shadow-md hover:scale-110 transition-transform">⬅</button>
-                            <h3 id="playingTitle" class="font-extrabold text-sm sm:text-base text-white truncate drop-shadow-md tracking-wide">▶ Class Video</h3>
-                        </div>
-
-                        <div id="bufferLoader" class="buffer-overlay hidden">
+                <!-- UPGRADED VIDEO PLAYER WRAPPER -->
+                <div class="w-full bg-black rounded-t-2xl overflow-hidden relative group shadow-2xl">
+                    <div id="hlsScreen" class="screen relative w-full aspect-video border-0 rounded-none bg-black">
+                        <div id="bufferLoader" class="buffer-overlay hidden z-40">
                             <div class="spinner-ring"></div>
                         </div>
 
                         <video id="video" playsinline preload="metadata" class="w-full h-full object-contain"></video>
 
+                        <!-- SETTINGS MENU -->
                         <div id="settingsMenu" class="ott-settings-popup">
                             <div class="sett-header">
                                 <span>⚙️ Quality & Speed</span>
@@ -189,62 +184,68 @@
                             </div>
                         </div>
 
-                        <!-- Center Play/Pause Controls -->
-                        <div id="centerControls" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center gap-6 sm:gap-10 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <button id="back" class="text-white bg-black/40 hover:bg-blue-600 rounded-lg w-12 h-10 sm:w-14 sm:h-12 flex items-center justify-center backdrop-blur-md shadow-lg transition-all" title="10s Back">
-                                <svg fill="white" viewBox="0 0 24 24" width="24" height="24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
-                            </button>
-                            <button id="toggle" class="text-white bg-black/40 hover:bg-blue-600 rounded-lg w-14 h-12 sm:w-16 sm:h-14 flex items-center justify-center backdrop-blur-md shadow-lg transition-all" title="Play/Pause">
-                                <svg fill="white" viewBox="0 0 24 24" width="32" height="32"><path d="M8 5v14l11-7z"/></svg>
-                            </button>
-                            <button id="next" class="text-white bg-black/40 hover:bg-blue-600 rounded-lg w-12 h-10 sm:w-14 sm:h-12 flex items-center justify-center backdrop-blur-md shadow-lg transition-all" title="10s Forward">
-                                <svg fill="white" viewBox="0 0 24 24" width="24" height="24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6-8.5-6z"/></svg>
-                            </button>
+                        <!-- TOP BAR (Title & Back - Transparent) -->
+                        <div class="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-30 bg-gradient-to-b from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-auto">
+                            <div class="flex items-center gap-4">
+                                <button onclick="closePlayerBox()" class="text-white hover:text-sky-300 transition font-black text-2xl drop-shadow-lg cursor-pointer">⬅</button>
+                                <span id="playerTopTitle" class="text-white font-extrabold text-sm sm:text-base uppercase drop-shadow-lg tracking-wide">VIDEO TITLE</span>
+                            </div>
                         </div>
 
-                        <!-- 98% Transparent Overlay Controls -->
-                        <div id="playerControlsBar" class="absolute bottom-0 left-0 w-full px-4 pb-2 pt-10 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style="background: linear-gradient(to top, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.02) 100%);">
-                            <div class="flex items-center gap-3 mb-1">
-                                <span id="time" class="text-white text-[12px] font-bold drop-shadow-md">00:00 / 00:00</span>
-                            </div>
-                            <div class="w-full mb-2">
-                                <input id="seek" class="w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer outline-none" style="accent-color: #ff0000;" type="range" min="0" max="1000" value="0">
-                            </div>
-                            <div class="flex justify-between items-center pb-1">
-                                <div class="flex items-center gap-2">
-                                    <span class="w-2 h-2 rounded-full bg-red-600 shadow-[0_0_8px_#ff0000]"></span>
-                                    <span class="text-white text-xs font-black tracking-widest drop-shadow-md">LIVE</span>
+                        <!-- CENTER CONTROLS (Big Transparent Buttons) -->
+                        <div class="absolute inset-0 flex items-center justify-center gap-8 sm:gap-14 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                            <button id="back" class="pointer-events-auto w-14 h-10 sm:w-16 sm:h-12 flex items-center justify-center bg-blue-500/80 hover:bg-blue-600 rounded-lg text-white text-xl sm:text-2xl transition cursor-pointer shadow-lg">⏪</button>
+                            <button id="toggle" class="pointer-events-auto w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center bg-transparent text-white text-5xl sm:text-6xl transition drop-shadow-2xl cursor-pointer">▶</button>
+                            <button id="next" class="pointer-events-auto w-14 h-10 sm:w-16 sm:h-12 flex items-center justify-center bg-blue-500/80 hover:bg-blue-600 rounded-lg text-white text-xl sm:text-2xl transition cursor-pointer shadow-lg">⏩</button>
+                        </div>
+
+                        <!-- BOTTOM TRANSPARENT BAR -->
+                        <div id="playerControlsBar" class="absolute bottom-0 left-0 right-0 p-3 sm:p-5 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-transparent pointer-events-auto">
+                            <div class="flex flex-col gap-1.5 w-full">
+                                <div class="flex items-center justify-between px-1">
+                                    <span id="time" class="text-white text-xs sm:text-sm font-bold drop-shadow-lg tracking-wide">00:00 / 00:00</span>
                                 </div>
-                                <div class="flex items-center gap-5">
-                                    <button onclick="toggleSettingsMenu()" class="text-white text-lg drop-shadow-md hover:scale-110 transition-transform" title="Settings">⚙️</button>
-                                    <button id="fs" class="text-white text-lg drop-shadow-md hover:scale-110 transition-transform" title="Fullscreen">⛶</button>
+                                
+                                <!-- Red Seek Bar -->
+                                <input id="seek" class="yt-seek w-full h-1.5 sm:h-2 rounded-lg appearance-none cursor-pointer" type="range" min="0" max="1000" value="0">
+                                
+                                <div class="flex items-center justify-between px-1 mt-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)]"></span>
+                                        <span class="text-white text-[10px] sm:text-xs font-black tracking-widest drop-shadow-lg uppercase">LIVE</span>
+                                    </div>
+                                    <div class="flex items-center gap-5">
+                                        <button onclick="toggleSettingsMenu()" class="text-white hover:text-sky-300 transition text-xl sm:text-2xl drop-shadow-lg cursor-pointer">⚙</button>
+                                        <button id="fs" class="text-white hover:text-sky-300 transition text-xl sm:text-2xl drop-shadow-lg cursor-pointer font-black">⛶</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div id="ytScreen" class="screen hidden aspect-video">
+                    <!-- YT SCREEN FALLBACK -->
+                    <div id="ytScreen" class="screen hidden aspect-video border-0">
                         <iframe id="ytFrame" class="w-full h-full" src="" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
                     </div>
 
-                    <div id="downloadBox" class="progressBox bg-white p-3 hidden">
+                    <div id="downloadBox" class="progressBox absolute top-16 right-4 z-40 bg-white/95 rounded-xl shadow-xl">
                         <div id="downloadText" class="text-xs text-slate-900 font-extrabold mb-1">Preparing download…</div>
-                        <div class="bar w-full h-2 bg-slate-200 rounded-full overflow-hidden"><i id="bar" class="h-full bg-blue-600 block w-0"></i></div>
+                        <div class="bar"><i id="bar"></i></div>
                     </div>
                 </div>
 
-                <!-- NEW EXTERNAL BUTTONS ROW (Download & PDF only) -->
-                <div class="flex gap-3 mt-4 mb-4">
-                    <button id="download" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-md transition-all">⬇ Download Video</button>
-                    <button id="playerPdf1" onclick="openActivePlayerPdf(1)" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3.5 rounded-xl font-black text-sm hidden items-center justify-center gap-2 shadow-md transition-all">📄 View PDF</button>
-                    <button id="playerPdf2" onclick="openActivePlayerPdf(2)" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3.5 rounded-xl font-black text-sm hidden items-center justify-center gap-2 shadow-md transition-all">📄 View PDF 2</button>
+                <!-- ONLY DOWNLOAD & PDF BUTTONS BELOW THE VIDEO -->
+                <div class="bg-[#111111] rounded-b-2xl p-4 sm:p-5 flex flex-wrap items-center gap-3 shadow-lg border-t border-gray-800">
+                    <button id="download" class="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full font-bold text-xs transition border border-white/10 shadow-sm">⬇ Download Video</button>
+                    <button id="playerPdf1" onclick="openActivePlayerPdf(1)" class="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full font-bold text-xs transition border border-white/10 shadow-sm hidden">📄 Survey / PDF 1</button>
+                    <button id="playerPdf2" onclick="openActivePlayerPdf(2)" class="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full font-bold text-xs transition border border-white/10 shadow-sm hidden">📄 PDF 2</button>
                 </div>
-
             </div>
 
-            <div id="playerBottomSection" class="max-w-5xl mx-auto mt-2">
-                <div id="nextClassesBox" class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-sky-100">
+            <div id="playerBottomSection" class="max-w-5xl mx-auto mt-6">
+                <!-- NEXT CLASSES SECTION -->
+                <div id="nextClassesBox" class="sky-card p-5">
+                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-sky-200">
                         <div>
                             <span class="text-[10px] font-black text-sky-700 uppercase">Up Next in Topic</span>
                             <h4 class="font-black text-lg text-slate-900">⏭️ Next Classes</h4>
@@ -253,25 +254,18 @@
                     </div>
                     <div id="nextClassesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
                 </div>
-
-                <!-- BORDERLESS INLINE PDF -->
-                <div id="inlinePdfBox" class="bg-white p-2 hidden">
-                    <div class="flex flex-wrap justify-between items-center gap-2 mb-2 pb-2 border-b border-sky-100">
-                        <div class="flex items-center gap-2 min-w-0">
-                            <button onclick="switchBottomToNextClasses()" class="btn-nav bg-slate-900 text-white border-0 text-xs shrink-0">⏭️ Back to Next Classes</button>
-                            <h4 id="inlinePdfTitle" class="font-extrabold text-slate-900 text-sm truncate">📄 Class Notes PDF</h4>
-                        </div>
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <!-- REMOVED APPX, GOOGLE, DOWNLOAD BUTTONS -->
-                            <button onclick="switchBottomToNextClasses()" class="btn-nav bg-rose-600 text-white border-0 text-xs">✖ Close PDF</button>
-                        </div>
-                    </div>
-                    <iframe id="inlinePdfFrame" class="w-full h-screen bg-slate-900 border-0" src="" frameborder="0"></iframe>
-                </div>
             </div>
         </section>
 
-        <!-- SLIDE 4: FULL-SCREEN TCS CBT MOCK TEST ENGINE -->
+        <!-- INLINE FULL SCREEN PDF VIEWER (BORDERLESS) -->
+        <div id="inlinePdfBox" class="hidden fixed inset-0 z-50 bg-black/95 flex flex-col">
+            <div class="absolute top-4 right-4 z-50">
+                <button onclick="switchBottomToNextClasses()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-2xl border-0 cursor-pointer transition">✖ Close PDF</button>
+            </div>
+            <iframe id="inlinePdfFrame" class="w-full h-full border-0 rounded-none bg-[#1a1a1a]" src="" frameborder="0"></iframe>
+        </div>
+
+        <!-- SLIDE 4: FULL-SCREEN TCS CBT MOCK TEST ENGINE (EXACT tcs.html STEP-BY-STEP UI FOR MOBILE & PC) -->
         <section id="slideTestAttempt" class="slide-page hidden-slide">
             <div id="tcs-app-wrapper" class="tcs-fullscreen-shell">
 
@@ -285,7 +279,7 @@
 
                         <h2 id="tcs-start-title" style="color: #1a237e; border-bottom: 1px solid #eee; padding-bottom: 12px; margin-bottom: 14px;">(TCS Pattern) Mock Test</h2>
                         
-                        <!-- Dynamic Compulsory + Optional Subject Cards -->
+                        <!-- Dynamic Compulsory + Optional Subject Cards (e.g., Hindi vs English) -->
                         <div id="subjects-selection-container"></div>
                         
                         <!-- Deep Parsed Test Metadata Box -->
@@ -546,18 +540,12 @@
             </div>
         </section>
 
-        <!-- SLIDE 6: PDF VIEWER (FULL SCREEN NO BORDERS) -->
-        <section id="slidePdf" class="slide-page hidden-slide">
-            <div class="bg-white w-full h-full p-2">
-                <div class="flex flex-wrap justify-between items-center gap-2 mb-2 pb-2 border-b border-sky-100">
-                    <h3 id="pdfTitle" class="font-extrabold text-slate-900 text-sm sm:text-base truncate">📄 PDF Document</h3>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <!-- REMOVED APPX, GOOGLE, DOWNLOAD BUTTONS -->
-                        <button onclick="closePdfSlide()" class="btn-nav bg-rose-600 text-white border-0 text-xs">✖ Close PDF</button>
-                    </div>
-                </div>
-                <iframe id="pdfFrame" class="w-full h-screen bg-slate-900 border-0" src="" frameborder="0"></iframe>
+        <!-- SLIDE 6: PDF VIEWER FULL SCREEN (BORDERLESS) -->
+        <section id="slidePdf" class="slide-page hidden-slide fixed inset-0 z-50 bg-black/95">
+            <div class="absolute top-4 right-4 z-50">
+                <button onclick="closePdfSlide()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-2xl border-0 cursor-pointer transition">✖ Close PDF</button>
             </div>
+            <iframe id="pdfFrame" class="w-full h-full border-0 rounded-none bg-[#1a1a1a]" src="" frameborder="0"></iframe>
         </section>
 
     </main>
