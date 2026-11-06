@@ -146,6 +146,14 @@ function start() {
     let tokMatch = cleanRaw.match(/(edge-cache-token=[^&]+)/);
     if (tokMatch) cachedToken = tokMatch[1];
 
+    // --- VIDEO MEMORY RESUME SYSTEM (Check saved time) ---
+    if (typeof state !== 'undefined' && state.activeKey) {
+        const savedMemory = localStorage.getItem('vid_resume_' + state.activeKey);
+        if (savedMemory && parseFloat(savedMemory) > 0) {
+            resumeSeekTime = parseFloat(savedMemory);
+        }
+    }
+
     if (cleanRaw.includes(".mp4") && !cleanRaw.includes(".m3u8")) {
         v.src = cleanRaw;
         populateQualitySettings([]);
@@ -269,17 +277,13 @@ window.toggleSettingsMenu = function() {
     if (menu) menu.classList.toggle("show");
 };
 
-// TAP-TO-TOGGLE CONTROLS VISIBILITY LOGIC FOR MOBILE TOUCH
 const hlsScreen = document.getElementById("hlsScreen");
-const playerControlsBar = document.getElementById("playerControlsBar");
 
 if (hlsScreen) {
     hlsScreen.addEventListener("click", (e) => {
-        // Prevent toggle if clicking directly on buttons or settings menu
         if (e.target.closest("button") || e.target.closest("input") || e.target.closest("#settingsMenu")) {
             return;
         }
-        // Force hover-like state on mobile by toggling a class
         hlsScreen.classList.toggle("touch-active-controls");
         
         const menu = document.getElementById("settingsMenu");
@@ -358,10 +362,22 @@ function fmt(x) {
 }
 
 const toggleBtn = document.getElementById("toggle");
-if (toggleBtn) toggleBtn.onclick = () => v.paused ? v.play() : v.pause();
+const iconPlay = document.getElementById("icon-play");
+const iconPause = document.getElementById("icon-pause");
 
-v.onplay = () => { if (toggleBtn) toggleBtn.textContent = "⏸"; showLoader(false); };
-v.onpause = () => { if (toggleBtn) toggleBtn.textContent = "▶"; };
+if (toggleBtn) {
+    toggleBtn.onclick = () => v.paused ? v.play() : v.pause();
+}
+
+v.onplay = () => { 
+    if (iconPlay) iconPlay.classList.add("hidden");
+    if (iconPause) iconPause.classList.remove("hidden");
+    showLoader(false); 
+};
+v.onpause = () => { 
+    if (iconPlay) iconPlay.classList.remove("hidden");
+    if (iconPause) iconPause.classList.add("hidden");
+};
 v.onwaiting = () => showLoader(true);
 v.onplaying = () => showLoader(false);
 v.oncanplay = () => showLoader(false);
@@ -372,26 +388,10 @@ if (backBtn) backBtn.onclick = () => v.currentTime = Math.max(0, v.currentTime -
 const nextBtn = document.getElementById("next");
 if (nextBtn) nextBtn.onclick = () => v.currentTime = Math.min(v.duration || Infinity, v.currentTime + 10);
 
-const muteBtn = document.getElementById("mute");
-if (muteBtn) muteBtn.onclick = () => {
-    v.muted = !v.muted;
-    muteBtn.textContent = v.muted ? "🔇" : "🔊";
-};
-
 const dlBtn = document.getElementById("download");
 if (dlBtn) dlBtn.onclick = downloadMerged;
 
-const pipBtn = document.getElementById("pip");
-if (pipBtn) pipBtn.onclick = async () => {
-    try {
-        if (document.pictureInPictureElement) await document.exitPictureInPicture();
-        else if (v.requestPictureInPicture) await v.requestPictureInPicture();
-    } catch {}
-};
-
-// FULLSCREEN & MINIMIZE BUTTON LOGIC
 const fsBtn = document.getElementById("fs");
-
 if (fsBtn && hlsScreen) {
     fsBtn.onclick = async () => {
         try {
@@ -405,7 +405,6 @@ if (fsBtn && hlsScreen) {
 }
 
 document.addEventListener("fullscreenchange", () => {
-    // The visual UI adjustments for fullscreen are handled smoothly via CSS and Tailwind.
     if (document.fullscreenElement) {
         if (fsBtn) fsBtn.textContent = "🗗";
     } else {
@@ -419,6 +418,20 @@ v.ontimeupdate = () => {
     const timeEl = document.getElementById("time");
     if (Number.isFinite(d) && d > 0 && seekEl) seekEl.value = v.currentTime / d * 1000;
     if (timeEl) timeEl.textContent = fmt(v.currentTime) + " / " + fmt(d);
+
+    // --- AUTO SAVE PROGRESS TO MEMORY (Every 2 seconds) ---
+    if (typeof state !== 'undefined' && state.activeKey && v.currentTime > 2) {
+        if (Math.floor(v.currentTime) % 2 === 0) {
+            localStorage.setItem('vid_resume_' + state.activeKey, v.currentTime);
+        }
+    }
+};
+
+// --- CLEAR MEMORY IF VIDEO ENDS ---
+v.onended = () => {
+    if (typeof state !== 'undefined' && state.activeKey) {
+        localStorage.removeItem('vid_resume_' + state.activeKey);
+    }
 };
 
 const seekEl = document.getElementById("seek");
