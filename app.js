@@ -8,6 +8,12 @@ const AES_KEY = CryptoJS.enc.Utf8.parse("638udh3829162018");
 const WORKER_RAW_PROXY = "https://proplayer.allswbatch22.workers.dev/proxy?url=";
 
 // =====================================================
+// CACHING VARIABLES (To stop repeated MongoDB fetching)
+// =====================================================
+let CACHED_DB_TOKENS = null;
+let CACHED_PAID_BATCHES = null;
+
+// =====================================================
 // JWT DECODER & USER PERSONAL TOKEN STORAGE
 // =====================================================
 function extractUidFromJwt(jwtStr) {
@@ -52,20 +58,23 @@ let USER_TOKENS = getUserSavedTokens();
 let USER_PROFILE = getSavedUserProfile();
 
 // =====================================================
-// MONGODB DYNAMIC TOKENS FETCH (Privacy Fixed)
+// MONGODB DYNAMIC TOKENS FETCH (With Smart Caching)
 // =====================================================
 async function fetchTokensFromDB() {
+    if (CACHED_DB_TOKENS) return CACHED_DB_TOKENS; // Return from cache if already fetched
+    
     try {
         const res = await fetch(`${BOT_API_BASE}/api/get_tokens`);
         const json = await res.json();
         if (json && json.status === "success" && json.tokens) {
-            return json.tokens.map((t, idx) => ({
+            CACHED_DB_TOKENS = json.tokens.map((t, idx) => ({
                 id: "db_tok_" + idx,
-                label: `App Server`, // Upgraded Label
+                label: `Cloud Server`, 
                 userId: String(t.userId || t.id),
                 token: t.token,
                 isAdmin: true
             }));
+            return CACHED_DB_TOKENS;
         }
     } catch (e) {
         console.warn("DB Fetch Error (Bot sleeping):", e);
@@ -340,7 +349,7 @@ window.submitUserLogin = async function(mode) {
         updateTokenBadge();
         setTimeout(() => {
             closeLoginModal();
-            if (state.currentSlide === "slideExplorer" && state.cat === "paid") renderPaidBatches(true);
+            if (state.currentSlide === "slideExplorer" && state.cat === "paid") renderPaidBatches();
         }, 700);
         return;
     }
@@ -406,7 +415,7 @@ window.submitUserLogin = async function(mode) {
     updateTokenBadge();
     setTimeout(() => {
         closeLoginModal();
-        if (state.currentSlide === "slideExplorer" && state.cat === "paid") renderPaidBatches(true);
+        if (state.currentSlide === "slideExplorer" && state.cat === "paid") renderPaidBatches();
     }, 700);
 };
 
@@ -512,22 +521,136 @@ function resolvePdfUrl(encPdf, signedPdf) {
 }
 
 // =====================================================
-// FALLBACK DATABASE 
+// REAL FALLBACK DATABASE FROM YOUR LOGS
 // =====================================================
 const DB = {
-    paidCourses: [],
-    paidSubjects: [],
-    paidTopics: {},
-    paidLectures: {},
-    freeBatches: [],
-    freeSubjects: [],
-    freeTopics: {},
-    freeLectures: {},
-    paidTestSeries: [],
-    freeTestSeries: [],
-    tsSubjects: {},
-    tsTitles: {},
-    fallbackCbtQuestions: []
+    paidCourses: [
+        { id: "571", course_name: "SSC GD भर्ती 2027 (वीर बैच)", exam_category: "RWA SSC EXAMS • PAID", exam_logo: "https://appx-wsb-gcp-mcdn.akamai.net.in/exam/2022-02-07-0.9839972577217094.png", test_series_id: "700" }
+    ],
+    paidSubjects: [
+        { subjectid: "3610", subject_name: "History (वीर बैच)", subject_logo: "" },
+        { subjectid: "1", subject_name: "Maths", subject_logo: "https://appxcontent.kaxa.in/subject/2024-04-10-0.8626713728066564.jpg" },
+        { subjectid: "3527", subject_name: "Physics Dharmendra Sir", subject_logo: "" }
+    ],
+    paidTopics: {
+        "3610": [{ topicid: "42301", topic_name: "सिंधु सभ्यता" }]
+    },
+    paidLectures: {
+        "42301": [
+            {
+                id: "349275",
+                Title: "History By Parul Mam || सिंधु सभ्यता",
+                date_and_time: "08-10-2026 at 02:00 pm",
+                thumbnail: "https://appx-content-v2.classx.co.in/paid_course3/2026-10-07-0_3401609217976156.jpg",
+                file_link: "yc79PF7PfaItE6uX7lAA8ABqbrWNB1WgbrzGsR2wlcFMhAR2tn+h+ETmGcuzjpU5lIYYSRnaL7bMlKrf7UouOCRvHozzqOa6f7eXz7ZPaEE0fRd/NiEP2WEQYJbqwKEM+MU8uRUEXFx4/07LTnptyQ==:ZmVkY2JhOTg3NjU0MzIxMA==",
+                download_links: [
+                    { quality: "720p", path: "m7hcRsBTJp5eNY5aTdn8qpPBOzdeUeGZQY2wVY0qocyzI/GQp7GTpQTXEQI3QwV4TBS4t/fcLhrLe6ZhZ45UCH+PnnUxKByF74TDwQBmgL8IryqFfW2RBko3ChFPEicQTi3gci9AKv0/IhnCF+NqXBt9k0YzrosmgyXn3Oh6AkPFrQ8XsVMQ7udZ3fwSrS+Y:ZmVkY2JhOTg3NjU0MzIxMA==" }
+                ]
+            }
+        ]
+    },
+    freeBatches: [
+        { id: "free_101", course_name: "RWA Free YouTube Marathon Series", exam_logo: "https://placehold.co/600x320/0284c7/ffffff?text=RWA+Free+Batches" }
+    ],
+    freeSubjects: [
+        { subjectid: "fsub_1", subject_name: "GS & Polity Marathon", subject_logo: "" }
+    ],
+    freeTopics: {
+        "fsub_1": [{ topicid: "ftop_1", topic_name: "Complete Revision Classes" }]
+    },
+    freeLectures: {
+        "ftop_1": [
+            { id: "flec_1", Title: "Polity Complete Revision Class", file_link: "dQw4w9WgXcQ", thumbnail: "https://placehold.co/600x320/0284c7/ffffff?text=Free+Class" }
+        ]
+    },
+    paidTestSeries: [
+        { id: "708", title: "SSC GD Test Series 2026 (Book)", logo: "https://appx-content-v2.classx.co.in/subject/2026-07-08-0_5839850466807497.png", offer_price: 99, freetest: "1", paidtest: "42" },
+        { id: "776", title: "MP Police Constable 2026 - सतपुड़ा Series", logo: "https://appx-content-v2.classx.co.in/subject/2026-09-18-0_25895258012558897.jpeg", offer_price: 99, freetest: "1", paidtest: "15" },
+        { id: "534", title: "BSF RO/RM Paid Test Series 2025", logo: "https://appx-content-v2.classx.co.in/subject/2026-05-26-0_6868771234595682.jpeg", offer_price: 149, freetest: "1", paidtest: "20" },
+        { id: "744", title: "UPSSSC PET Percentile Booster Paid Test Series 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-08-17-0_091324675327629.jpeg", offer_price: 99, freetest: "2", paidtest: "33" },
+        { id: "663", title: "UPPCS Prelims Paid Test Series 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-04-28-0_6713576579890046.jpeg", offer_price: 199, freetest: "2", paidtest: "25" },
+        { id: "695", title: "BSF Tradesman Paid Test Series 2025-26", logo: "https://appx-content-v2.classx.co.in/subject/2026-06-16-0_6020598298722372.jpeg", offer_price: 99, freetest: "0", paidtest: "15" },
+        { id: "766", title: "IBPS RRB Clerk Paid Test Series 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-09-03-0_833664505680896.jpeg", offer_price: 99, freetest: "2", paidtest: "8" },
+        { id: "767", title: "IBPS RRB PO Paid Test Series 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-09-03-0_3145229943435005.jpeg", offer_price: 99, freetest: "1", paidtest: "10" },
+        { id: "788", title: "MASTER UPSC PRELIMS TEST SERIES & MENTORSHIP", logo: "https://appx-content-v2.classx.co.in/subject/2026-09-29-0_2355880008171598.jpeg", offer_price: 1499, freetest: "1", paidtest: "30" }
+    ],
+    freeTestSeries: [
+        { id: "716", title: "SSC GD 2026-27 (Free Weekly Mock Test)", logo: "https://appx-content-v2.classx.co.in/subject/2026-07-08-0_5839850466807497.png" },
+        { id: "743", title: "UP Police Constable 2026 (Free Weekly Test)", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_5663049907369836.jpeg" },
+        { id: "727", title: "UPSSSC PET 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_62931795162936.jpeg" },
+        { id: "799", title: "RRB NTPC CBT - 1 2026-27", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_5663139095411013.jpeg" },
+        { id: "795", title: "UKSSSC Group C 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_5548408893128917.jpeg" },
+        { id: "784", title: "RRB Technician Grade-I 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_14122873860437668.jpeg" },
+        { id: "778", title: "RRB Technician Grade-III 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_07122037877353082.jpeg" },
+        { id: "689", title: "SSC CGL Mini Mock 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_9928777013427561.jpeg" },
+        { id: "801", title: "Indian Coast Guard 2026", logo: "https://appx-content-v2.classx.co.in/subject/2026-10-08-0_6774211576429437.jpeg" }
+    ],
+    tsSubjects: {
+        "700": [
+            { subjectid: "3171", subject_name: "SSC GD (Maths) Quiz & Tests", subject_logo: "" },
+            { subjectid: "3172", subject_name: "SSC GD (Reasoning)", subject_logo: "" },
+            { subjectid: "3173", subject_name: "SSC GD (Polity & GS)", subject_logo: "" },
+            { subjectid: "3174", subject_name: "SSC GD (Hindi)", subject_logo: "" }
+        ],
+        "776": [
+            { subjectid: "1415", subject_name: "FULL MOCK TEST", subject_logo: "https://appx-content-v2.classx.co.in/subject/2025-03-04-0.3071033524052684.jpeg" },
+            { subjectid: "2980", subject_name: "Test Schedule (Timetable)", subject_logo: "https://appx-content-v2.classx.co.in/subject/2026-10-07-0_7144586444576111.jpeg" }
+        ],
+        "534": [
+            { subjectid: "2077", subject_name: "BSF RO/RM (Static GK)", subject_logo: "" },
+            { subjectid: "2072", subject_name: "BSF RO/RM (Physics)", subject_logo: "" },
+            { subjectid: "2073", subject_name: "BSF RO/RM (Maths)", subject_logo: "" },
+            { subjectid: "2075", subject_name: "BSF RO/RM (History)", subject_logo: "" },
+            { subjectid: "2076", subject_name: "BSF RO/RM (Geography)", subject_logo: "" },
+            { subjectid: "2079", subject_name: "BSF RO/RM (English)", subject_logo: "" },
+            { subjectid: "2080", subject_name: "BSF RO/RM (Chemistry)", subject_logo: "" }
+        ],
+        "708": [
+            { subjectid: "-1", subject_name: "Uncategorized", subject_logo: "" }
+        ],
+        "716": [
+            { subjectid: "-1", subject_name: "Uncategorized", subject_logo: "" }
+        ]
+    },
+    tsTitles: {
+        "708_-1": [
+            { id: "41288", title: "SSC GD Test 01", test_series_id: "708", free_flag: "0", time: "60", questions: "100", marks: "160", show_sectionselector: "1", minimumsection: "4", maximumsection: "4", ui_type: "SSC", restrict_part_switching: "0", test_questions_url: "https://appx-content-v2.classx.co.in/test_title_question/rozgar_db/41288/41288_questions0.3526178863082372.json" },
+            { id: "42958", title: "SSC GD Test 01 (Bengali)", test_series_id: "708", free_flag: "0", time: "60", questions: "100", marks: "160", show_sectionselector: "1", minimumsection: "4", maximumsection: "4", ui_type: "SSC", restrict_part_switching: "0", test_questions_url: "https://testseries-assets-v3.classx.co.in/test_title_question/rozgar_db/42958/42958_questions0.4434236422240083.json" },
+            { id: "41289", title: "SSC GD Test 02", test_series_id: "708", free_flag: "0", time: "60", questions: "100", marks: "160", show_sectionselector: "1", minimumsection: "4", maximumsection: "4", ui_type: "SSC", restrict_part_switching: "0", test_questions_url: "https://testseries-assets-v3.classx.co.in/test_title_question/rozgar_db/41289/41289_questions0.37252867196578454.json" }
+        ],
+        "716_-1": [
+            { id: "48060", title: "SSC GD Marathi (18 October 2026)", test_series_id: "716", free_flag: "1", time: "15+15+15+15", questions: "100", marks: "160", show_sectionselector: "1", minimumsection: "4", maximumsection: "4", ui_type: "SSC", restrict_part_switching: "0", test_questions_url: "https://testseries-assets-v3.classx.co.in/test_title_question/rozgar_db/48060/48060_questions0.23999072496763452.json" }
+        ],
+        "700_3171": [
+            { id: "40426", title: "Ratio, Age, Mixture", test_series_id: "700", free_flag: "0", time: "60", questions: "50", marks: "50", test_questions_url: "https://testseries-assets-v3.classx.co.in/test_title_question/rozgar_db/40426/40426_questions0.8210916494359036.json" },
+            { id: "46376", title: "Percentage", test_series_id: "700", free_flag: "1", time: "25", questions: "20", marks: "20", test_questions_url: "https://testseries-assets-v3.classx.co.in/test_title_question/rozgar_db/46376/46376_questions0.4784600262440821.json" }
+        ],
+        "776_1415": [
+            { id: "45964", title: "MP Police Constable Live Mock 01", test_series_id: "776", free_flag: "1", time: "120", questions: "100", marks: "100", test_questions_url: "https://testseries-assets-v3.classx.co.in/test_title_question/rozgar_db/45964/45964_questions0.48368684422780495.json" }
+        ],
+        "534_2077": [
+            { id: "26680", title: "खेल (Sports Static GK)", test_series_id: "534", free_flag: "0", time: "10", questions: "10", marks: "20", test_questions_url: "https://testseries-assets-v2.classx.co.in/test_title_question/rozgar_db/26680/26680_questions1769763744.json" }
+        ],
+        "743_-1": [
+            { id: "47393", title: "UP Police Constable (11 October 2026)", test_series_id: "743", free_flag: "1", time: "120", questions: "150", marks: "300", test_questions_url: "https://appx-content-v2.classx.co.in/test_title_question/rozgar_db/47393/47393_questions0.2543844739643528.json" }
+        ]
+    },
+    fallbackCbtQuestions: [
+        {
+            id: "12370334",
+            question: `<p style="font-size:16pt"><span style="font-family:'KOKILA'">Find the third proportional of 25 and 45.</span></p><p style="font-size:16pt"><span style="font-family:'KOKILA'">25 और 45 का तृतीय समानुपाती ज्ञात कीजिए।</span></p>`,
+            option_1: `<p style="font-size:16pt"><span style="font-family:'KOKILA'">81</span></p>`,
+            option_2: `<p style="font-size:16pt"><span style="font-family:'KOKILA'">65</span></p>`,
+            option_3: `<p style="font-size:16pt"><span style="font-family:'KOKILA'">85</span></p>`,
+            option_4: `<p style="font-size:16pt"><span style="font-family:'KOKILA'">76</span></p>`,
+            answer: "1",
+            positive_marks: "2.00",
+            negative_marks: "0.50",
+            section_id: "1",
+            subject: "Mathematics",
+            solution_text: `<p style="font-size:16pt"><span style="font-family:'KOKILA'">a व b का तृतीय समानुपाती = (b × b) / a = (45 × 45) / 25 = 81</span></p>`
+        }
+    ]
 };
 
 let state = {
@@ -549,7 +672,6 @@ let state = {
     activeKey: null,
     currentPdfUrl: "",
     inlinePdfUrl: "",
-    cachedPaidBatchesHTML: null, // CACHE FIX
     tsMode: "paid_ts",
     activeSeriesId: null,
     activeSeriesTitle: "",
@@ -590,7 +712,7 @@ function showSlide(slideId) {
 
     const topNav = document.getElementById("topHeaderNav");
     if (topNav) {
-        if (slideId === "slideHome" || slideId === "slideExplorer") topNav.classList.remove("hidden");
+        if (slideId === "slideHome") topNav.classList.remove("hidden");
         else topNav.classList.add("hidden");
     }
 
@@ -716,9 +838,9 @@ async function fetchAPIWithToken(endpoint, tokenObj, fallbackGetter) {
 }
 
 // =====================================================
-// BATCHES & COURSES (DYNAMIC DB TOKENS BINDING + CACHE)
+// BATCHES & COURSES (DYNAMIC DB TOKENS BINDING + CACHING)
 // =====================================================
-async function renderPaidBatches(forceRefresh = false) {
+async function renderPaidBatches() {
     if (!enforceCompulsoryLogin()) return;
     state.view = "batches";
     document.getElementById("subTabs").classList.add("hidden");
@@ -726,18 +848,20 @@ async function renderPaidBatches(forceRefresh = false) {
     document.getElementById("headingText").textContent = "🎓 Purchased Paid Batches";
 
     const grid = document.getElementById("mainGrid");
-
-    if (!forceRefresh && state.cachedPaidBatchesHTML) {
-        grid.innerHTML = state.cachedPaidBatchesHTML;
+    
+    // 🔥 Cache Check: Agar pehle se load ho chuka hai, toh sidha dikha do (No MongoDB Hit)
+    if (CACHED_PAID_BATCHES && CACHED_PAID_BATCHES.length > 0) {
+        renderBatchesToGrid(CACHED_PAID_BATCHES);
         return;
     }
 
-    // App Server Connecting Text Upgraded
-    grid.innerHTML = `<div class="col-span-full py-12 text-center font-extrabold text-slate-800">🔄 App server se connect ho raha hai...</div>`;
+    grid.innerHTML = `<div class="col-span-full py-12 text-center font-extrabold text-slate-800">🔄 Fetching Live DB Tokens & Batches...</div>`;
 
     let mergedCourses = [];
     const seenIds = new Set();
     const allTokensToFetch = await getAllTokensForCourses();
+
+    grid.innerHTML = `<div class="col-span-full py-12 text-center font-extrabold text-slate-800">🔄 Merging batches from ${allTokensToFetch.length} Active Accounts...</div>`;
 
     for (const tokObj of allTokensToFetch) {
         const uid = tokObj.userId || extractUidFromJwt(tokObj.token) || "4756316";
@@ -770,10 +894,17 @@ async function renderPaidBatches(forceRefresh = false) {
         }
     }
 
+    // 🔥 Data save kar lo memory mein
+    CACHED_PAID_BATCHES = mergedCourses;
+    renderBatchesToGrid(mergedCourses);
+}
+
+// 📌 Helper Function to Render Grid Faster
+function renderBatchesToGrid(mergedCourses) {
+    const grid = document.getElementById("mainGrid");
     grid.innerHTML = "";
     if (mergedCourses.length === 0) {
         grid.innerHTML = `<div class="col-span-full py-12 text-center font-extrabold text-slate-800">❌ In accounts mein koi paid batch nahi mila.</div>`;
-        state.cachedPaidBatchesHTML = grid.innerHTML;
         return;
     }
 
@@ -797,8 +928,6 @@ async function renderPaidBatches(forceRefresh = false) {
                 </div>
             </div>`;
     });
-
-    state.cachedPaidBatchesHTML = grid.innerHTML;
 }
 
 async function renderFreeBatches() {
@@ -1138,13 +1267,15 @@ function renderLectureList(list, boundTokenObj) {
                 </div>
                 <div class="p-4 pt-2 border-t border-sky-100 flex flex-wrap gap-2">
                     <button onclick="playClassInRwaPlayer('${key}')" class="btn-watch flex-1 text-xs">▶ Watch Video</button>
+                    ${pdf1 ? `<button onclick="openPdf('${key}', 1)" class="btn-pdf1 text-xs">📄 PDF 1</button>` : ""}
+                    ${pdf2 ? `<button onclick="openPdf('${key}', 2)" class="btn-pdf2 text-xs">📄 PDF 2</button>` : ""}
                 </div>
             </div>`;
     });
 }
 
 // =====================================================
-// PLAYER ENGINE (UI UPDATED FOR NEW INDEX.HTML)
+// PLAYER ENGINE (USES EXACT BATCH TOKEN + SMART FALLBACK)
 // =====================================================
 async function playClassInRwaPlayer(key) {
     state.activeKey = key;
@@ -1157,22 +1288,19 @@ async function playClassInRwaPlayer(key) {
     window.ACTIVE_PLAYER_TOKEN = batchTok.token;
 
     showSlide("slidePlayer");
-    
-    // Set UI Titles
-    document.getElementById("playingTitle").textContent = info.title;
-    const bottomTitle = document.getElementById("bottomVideoTitle");
-    if (bottomTitle) bottomTitle.textContent = info.title;
+    document.getElementById("playingTitle").textContent = "▶ " + info.title;
 
     closeInlinePdfAndReset();
+    renderNextClassesBelowPlayer(key);
 
     const pPdf1 = document.getElementById("playerPdf1");
     const pPdf2 = document.getElementById("playerPdf2");
     if (pPdf1) {
-        if (info.pdf1) pPdf1.classList.remove("hidden");
+        if (info.pdf1) pPdf1.classList.remove("hidden", "flex");
         else pPdf1.classList.add("hidden");
     }
     if (pPdf2) {
-        if (info.pdf2) pPdf2.classList.remove("hidden");
+        if (info.pdf2) pPdf2.classList.remove("hidden", "flex");
         else pPdf2.classList.add("hidden");
     }
 
@@ -1226,7 +1354,44 @@ async function playClassInRwaPlayer(key) {
     }
 }
 
-// INLINE SPLIT-SCREEN PDF LOGIC (New Style)
+function renderNextClassesBelowPlayer(activeKey) {
+    const grid = document.getElementById("nextClassesGrid");
+    const countBadge = document.getElementById("nextClassesCount");
+    if (!grid) return;
+
+    const allKeys = state.currentLectureKeys || [];
+    const currentIndex = allKeys.indexOf(activeKey);
+    const orderedNextKeys = currentIndex >= 0
+        ? [...allKeys.slice(currentIndex + 1), ...allKeys.slice(0, currentIndex)]
+        : allKeys.filter(k => k !== activeKey);
+
+    if (countBadge) countBadge.textContent = `${orderedNextKeys.length} Classes`;
+
+    if (orderedNextKeys.length === 0) {
+        grid.innerHTML = `<div class="col-span-full py-6 text-center text-xs font-bold text-slate-500">Is topic mein yeh aakhri class hai.</div>`;
+        return;
+    }
+
+    grid.innerHTML = orderedNextKeys.map((k, idx) => {
+        const item = state.mediaMap[k];
+        if (!item) return "";
+        return `
+            <div class="grid-card p-3.5 flex flex-col justify-between">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-sky-100 text-sky-800 font-black text-xs flex items-center justify-center shrink-0">#${idx + 1}</div>
+                    <div class="min-w-0 flex-1">
+                        <span class="text-[10px] font-black text-sky-700 uppercase">Up Next</span>
+                        <h5 class="font-extrabold text-sm text-slate-900 line-clamp-2 mt-0.5">${item.title}</h5>
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-3 pt-2 border-t border-sky-100">
+                    <button onclick="playClassInRwaPlayer('${k}')" class="btn-watch flex-1 text-xs py-2">▶ Play Next</button>
+                    ${item.pdf1 ? `<button onclick="openInlinePdfForKey('${k}', 1)" class="btn-pdf1 text-xs py-2">📄 PDF</button>` : ""}
+                </div>
+            </div>`;
+    }).join("");
+}
+
 window.openActivePlayerPdf = function(num) {
     if (!state.activeKey) return;
     openInlinePdfForKey(state.activeKey, num);
@@ -1239,40 +1404,32 @@ window.openInlinePdfForKey = function(key, num) {
     if (!u) return;
 
     state.inlinePdfUrl = u;
+    document.getElementById("inlinePdfTitle").textContent = `📄 ${info.title} (PDF ${num})`;
 
-    // HIDE CHAT, SHOW PDF CONTAINER
-    document.getElementById("chatSection").classList.add("hidden");
-    const inlineBox = document.getElementById("inlinePdfBox");
-    inlineBox.classList.remove("hidden");
-    inlineBox.classList.add("flex"); // Apply flex class so iframe takes full space
+    document.getElementById("nextClassesBox").classList.add("hidden");
+    document.getElementById("inlinePdfBox").classList.remove("hidden");
 
-    setInlinePdfMode("appx");
-};
-
-window.setInlinePdfMode = function(mode) {
+    // Setting PDF Viewer to Default directly
     const frame = document.getElementById("inlinePdfFrame");
-    const u = state.inlinePdfUrl;
-    if (!u || !frame) return;
-    if (mode === "appx") {
+    if (frame) {
         frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(u)}&save_flag=1&is_encrypted=0`;
-    } else {
-        frame.src = `https://docs.google.com/viewer?url=${encodeURIComponent(u)}&embedded=true`;
     }
+    
+    document.getElementById("inlinePdfBox").scrollIntoView({ behavior: "smooth" });
 };
 
-window.closeInlinePdfAndReset = function() {
+window.switchBottomToNextClasses = function() {
+    closeInlinePdfAndReset();
+};
+
+function closeInlinePdfAndReset() {
     const frame = document.getElementById("inlinePdfFrame");
     if (frame) frame.src = "";
-    
-    // HIDE PDF, SHOW CHAT
-    const inlineBox = document.getElementById("inlinePdfBox");
-    if (inlineBox) {
-        inlineBox.classList.add("hidden");
-        inlineBox.classList.remove("flex");
-    }
-    const chatSection = document.getElementById("chatSection");
-    if (chatSection) chatSection.classList.remove("hidden");
-};
+    const pdfBox = document.getElementById("inlinePdfBox");
+    const nextBox = document.getElementById("nextClassesBox");
+    if (pdfBox) pdfBox.classList.add("hidden");
+    if (nextBox) nextBox.classList.remove("hidden");
+}
 
 function changeLectureQuality(qLabel) {
     const info = state.mediaMap[state.activeKey];
@@ -1288,7 +1445,7 @@ function changeLectureQuality(qLabel) {
 }
 
 // =====================================================
-// TEST SERIES EXPLORER
+// TEST SERIES EXPLORER (DEEP LOGS API INTEGRATION)
 // =====================================================
 async function openTestSeriesExplorer(mode) {
     if (!enforceCompulsoryLogin()) return;
@@ -1307,6 +1464,7 @@ async function openTestSeriesExplorer(mode) {
         document.getElementById("crumbText").textContent = "Official Exam Series";
         document.getElementById("headingText").textContent = "🏆 Paid Test Series";
 
+        // Fetch multiple pages as seen in old website logs
         const [p0, p10, p20] = await Promise.all([
             fetchAPIWithToken(`/get/test_series?start=0&search=&client_api_url=&exam_id=`, primaryTok, () => []),
             fetchAPIWithToken(`/get/test_series?start=10&search=&client_api_url=&exam_id=`, primaryTok, () => []),
@@ -1393,6 +1551,7 @@ async function openTestSeriesSubjects(tsId, tsTitle) {
     grid.innerHTML = `<div class="col-span-full py-10 text-center font-bold text-slate-700">Loading Test Series Subjects...</div>`;
 
     const useTok = state.activeTokenObj || USER_TOKENS[0];
+    // Trigger series verification as in old website logs
     fetchRawJSONWithToken(`/Test_Series/test_series_by_id?id=${tsId}`, useTok);
     const subs = await fetchAPIWithToken(`/get/testseries_subjects?testseries_id=${tsId}`, useTok, () => DB.tsSubjects[tsId] || []);
 
@@ -1437,6 +1596,7 @@ async function openTestSeriesTitles(tsId, subId, subName) {
 
     let list = await fetchAPIWithToken(ep, useTok, () => DB.tsTitles[`${tsId}_${subId}`] || []);
     if ((!list || list.length === 0) && String(subId) !== "-1") {
+        // Fallback check without chapter_id if needed
         const epAlt = `/get/test_titlev2?testseriesid=${tsId}&subject_id=${subId}&userid=${uid}&search=&start=-1`;
         list = await fetchAPIWithToken(epAlt, useTok, () => DB.tsTitles[`${tsId}_${subId}`] || DB.tsTitles["743_-1"] || []);
     }
@@ -1505,10 +1665,18 @@ function openTestPdf(tKey) {
     if (!t || !t.resolvedPdf) return;
     state.currentPdfUrl = t.resolvedPdf;
     document.getElementById("pdfTitle").textContent = `📄 ${t.title} (Paper PDF)`;
-    document.getElementById("rawPdfLink").href = t.resolvedPdf;
     showSlide("slidePdf");
+    
+    // Setting PDF Viewer to Default directly
+    const frame = document.getElementById("pdfFrame");
+    if (frame) {
+        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(t.resolvedPdf)}&save_flag=1&is_encrypted=0`;
+    }
 }
 
+// =====================================================
+// DELEGATE TEST LAUNCH TO DEDICATED TCS ENGINE (tcs-engine.js)
+// =====================================================
 async function launchCbtTest(tKey) {
     if (typeof window.launchTcsCbtEngine === "function") {
         await window.launchTcsCbtEngine(tKey);
@@ -1531,15 +1699,35 @@ function exitCbtTest() {
 }
 
 // =====================================================
-// PDF SLIDE ENGINE (FULL SCREEN NO BUTTONS)
+// PDF SLIDE ENGINE
 // =====================================================
+function openPdf(key, num) {
+    const info = state.mediaMap[key];
+    if (!info) return;
+    const u = num === 2 ? info.pdf2 : info.pdf1;
+    if (!u) return;
+
+    const vid = document.getElementById("video");
+    if (vid && !vid.paused) vid.pause();
+
+    state.currentPdfUrl = u;
+    document.getElementById("pdfTitle").textContent = `📄 ${info.title} (PDF ${num})`;
+    showSlide("slidePdf");
+    
+    // Setting PDF Viewer to Default directly
+    const frame = document.getElementById("pdfFrame");
+    if (frame) {
+        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(u)}&save_flag=1&is_encrypted=0`;
+    }
+}
+
 function closePdfSlide() {
     document.getElementById("pdfFrame").src = "";
     showSlide(state.previousSlide || "slideExplorer");
 }
 
 // =====================================================
-// USER PERSONAL TOKEN LIST
+// USER PERSONAL TOKEN LIST (NO ADMIN TOKENS)
 // =====================================================
 function renderTokenManagerList() {
     const container = document.getElementById("tokenListContainer");
@@ -1632,7 +1820,7 @@ function filterGrid() {
 }
 
 // =====================================================
-// INITIALIZATION ON PAGE LOAD
+// INITIALIZATION ON PAGE LOAD (Trigger Sync Fetch Check)
 // =====================================================
 updateTokenBadge();
 if (isUserLoggedIn()) {
@@ -1640,4 +1828,5 @@ if (isUserLoggedIn()) {
 } else {
     openLoginModal();
 }
+
 processPendingBotSync();
