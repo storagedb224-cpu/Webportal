@@ -8,10 +8,22 @@ const AES_KEY = CryptoJS.enc.Utf8.parse("638udh3829162018");
 const WORKER_RAW_PROXY = "https://proplayer.allswbatch22.workers.dev/proxy?url=";
 
 // =====================================================
-// CACHING VARIABLES (To stop repeated MongoDB fetching)
+// GLOBAL CACHE & REFRESH LOGIC (NO REPEATED DB FETCH)
 // =====================================================
-let CACHED_DB_TOKENS = null;
-let CACHED_PAID_BATCHES = null;
+let globalPaidBatchesCache = null;
+
+window.forceAppRefresh = function() {
+    const btn = document.querySelector("button[onclick='forceAppRefresh()']");
+    if (btn) btn.innerHTML = "🔄 Refreshing...";
+    
+    // Clear the memory cache so everything fetches fresh
+    globalPaidBatchesCache = null;
+    
+    // Completely reload the app for a clean start
+    setTimeout(() => {
+        window.location.reload(true);
+    }, 400);
+};
 
 // =====================================================
 // JWT DECODER & USER PERSONAL TOKEN STORAGE
@@ -58,23 +70,20 @@ let USER_TOKENS = getUserSavedTokens();
 let USER_PROFILE = getSavedUserProfile();
 
 // =====================================================
-// MONGODB DYNAMIC TOKENS FETCH (With Smart Caching)
+// MONGODB DYNAMIC TOKENS FETCH (Privacy Fixed)
 // =====================================================
 async function fetchTokensFromDB() {
-    if (CACHED_DB_TOKENS) return CACHED_DB_TOKENS; // Return from cache if already fetched
-    
     try {
         const res = await fetch(`${BOT_API_BASE}/api/get_tokens`);
         const json = await res.json();
         if (json && json.status === "success" && json.tokens) {
-            CACHED_DB_TOKENS = json.tokens.map((t, idx) => ({
+            return json.tokens.map((t, idx) => ({
                 id: "db_tok_" + idx,
                 label: `Cloud Server`, 
                 userId: String(t.userId || t.id),
                 token: t.token,
                 isAdmin: true
             }));
-            return CACHED_DB_TOKENS;
         }
     } catch (e) {
         console.warn("DB Fetch Error (Bot sleeping):", e);
@@ -838,9 +847,9 @@ async function fetchAPIWithToken(endpoint, tokenObj, fallbackGetter) {
 }
 
 // =====================================================
-// BATCHES & COURSES (DYNAMIC DB TOKENS BINDING + CACHING)
+// BATCHES & COURSES (DYNAMIC DB TOKENS BINDING & CACHING)
 // =====================================================
-async function renderPaidBatches() {
+async function renderPaidBatches(forceRefresh = false) {
     if (!enforceCompulsoryLogin()) return;
     state.view = "batches";
     document.getElementById("subTabs").classList.add("hidden");
@@ -848,10 +857,10 @@ async function renderPaidBatches() {
     document.getElementById("headingText").textContent = "🎓 Purchased Paid Batches";
 
     const grid = document.getElementById("mainGrid");
-    
-    // 🔥 Cache Check: Agar pehle se load ho chuka hai, toh sidha dikha do (No MongoDB Hit)
-    if (CACHED_PAID_BATCHES && CACHED_PAID_BATCHES.length > 0) {
-        renderBatchesToGrid(CACHED_PAID_BATCHES);
+
+    if (!forceRefresh && globalPaidBatchesCache && globalPaidBatchesCache.length > 0) {
+        grid.innerHTML = "";
+        renderBatchesGrid(globalPaidBatchesCache, grid);
         return;
     }
 
@@ -894,20 +903,18 @@ async function renderPaidBatches() {
         }
     }
 
-    // 🔥 Data save kar lo memory mein
-    CACHED_PAID_BATCHES = mergedCourses;
-    renderBatchesToGrid(mergedCourses);
-}
+    globalPaidBatchesCache = mergedCourses;
 
-// 📌 Helper Function to Render Grid Faster
-function renderBatchesToGrid(mergedCourses) {
-    const grid = document.getElementById("mainGrid");
     grid.innerHTML = "";
     if (mergedCourses.length === 0) {
         grid.innerHTML = `<div class="col-span-full py-12 text-center font-extrabold text-slate-800">❌ In accounts mein koi paid batch nahi mila.</div>`;
         return;
     }
 
+    renderBatchesGrid(mergedCourses, grid);
+}
+
+function renderBatchesGrid(mergedCourses, grid) {
     mergedCourses.forEach(c => {
         const logo = c.exam_logo || c.course_thumbnail || `https://placehold.co/600x320/0284c7/ffffff?text=Batch+${c.id}`;
         const safeName = (c.course_name || "RWA Paid Batch").replace(/'/g, "");
@@ -1288,7 +1295,8 @@ async function playClassInRwaPlayer(key) {
     window.ACTIVE_PLAYER_TOKEN = batchTok.token;
 
     showSlide("slidePlayer");
-    document.getElementById("playingTitle").textContent = "▶ " + info.title;
+    const topTitle = document.getElementById("playerTopTitle");
+    if(topTitle) topTitle.textContent = info.title;
 
     closeInlinePdfAndReset();
     renderNextClassesBelowPlayer(key);
@@ -1296,11 +1304,11 @@ async function playClassInRwaPlayer(key) {
     const pPdf1 = document.getElementById("playerPdf1");
     const pPdf2 = document.getElementById("playerPdf2");
     if (pPdf1) {
-        if (info.pdf1) pPdf1.classList.remove("hidden", "flex");
+        if (info.pdf1) pPdf1.classList.remove("hidden");
         else pPdf1.classList.add("hidden");
     }
     if (pPdf2) {
-        if (info.pdf2) pPdf2.classList.remove("hidden", "flex");
+        if (info.pdf2) pPdf2.classList.remove("hidden");
         else pPdf2.classList.add("hidden");
     }
 
@@ -1404,18 +1412,17 @@ window.openInlinePdfForKey = function(key, num) {
     if (!u) return;
 
     state.inlinePdfUrl = u;
-    document.getElementById("inlinePdfTitle").textContent = `📄 ${info.title} (PDF ${num})`;
-
     document.getElementById("nextClassesBox").classList.add("hidden");
     document.getElementById("inlinePdfBox").classList.remove("hidden");
+    setInlinePdfMode("appx");
+};
 
-    // Setting PDF Viewer to Default directly
+window.setInlinePdfMode = function(mode) {
     const frame = document.getElementById("inlinePdfFrame");
-    if (frame) {
-        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(u)}&save_flag=1&is_encrypted=0`;
-    }
-    
-    document.getElementById("inlinePdfBox").scrollIntoView({ behavior: "smooth" });
+    const u = state.inlinePdfUrl;
+    if (!u || !frame) return;
+    // Always strict appx mode for borderless full screen PDF
+    frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(u)}&save_flag=1&is_encrypted=0`;
 };
 
 window.switchBottomToNextClasses = function() {
@@ -1664,14 +1671,8 @@ function openTestPdf(tKey) {
     const t = state.testMap[tKey];
     if (!t || !t.resolvedPdf) return;
     state.currentPdfUrl = t.resolvedPdf;
-    document.getElementById("pdfTitle").textContent = `📄 ${t.title} (Paper PDF)`;
     showSlide("slidePdf");
-    
-    // Setting PDF Viewer to Default directly
-    const frame = document.getElementById("pdfFrame");
-    if (frame) {
-        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(t.resolvedPdf)}&save_flag=1&is_encrypted=0`;
-    }
+    setPdfMode("appx");
 }
 
 // =====================================================
@@ -1699,7 +1700,7 @@ function exitCbtTest() {
 }
 
 // =====================================================
-// PDF SLIDE ENGINE
+// PDF SLIDE ENGINE (FULL SCREEN BORDERLESS OVERLAY)
 // =====================================================
 function openPdf(key, num) {
     const info = state.mediaMap[key];
@@ -1711,14 +1712,16 @@ function openPdf(key, num) {
     if (vid && !vid.paused) vid.pause();
 
     state.currentPdfUrl = u;
-    document.getElementById("pdfTitle").textContent = `📄 ${info.title} (PDF ${num})`;
     showSlide("slidePdf");
-    
-    // Setting PDF Viewer to Default directly
+    setPdfMode("appx");
+}
+
+function setPdfMode(mode) {
     const frame = document.getElementById("pdfFrame");
-    if (frame) {
-        frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(u)}&save_flag=1&is_encrypted=0`;
-    }
+    const u = state.currentPdfUrl;
+    if (!u || !frame) return;
+    // Always strict appx mode for borderless full screen PDF
+    frame.src = `https://pdfweb.classx.co.in/pdfjs-latest/web/viewer.html?file=${encodeURIComponent(u)}&save_flag=1&is_encrypted=0`;
 }
 
 function closePdfSlide() {
