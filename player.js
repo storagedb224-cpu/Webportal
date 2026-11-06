@@ -269,11 +269,9 @@ window.toggleSettingsMenu = function() {
     if (menu) menu.classList.toggle("show");
 };
 
-// TAP-TO-TOGGLE CONTROLS VISIBILITY LOGIC (For Mobile & Desktop)
+// TAP-TO-TOGGLE CONTROLS VISIBILITY LOGIC FOR MOBILE TOUCH
 const hlsScreen = document.getElementById("hlsScreen");
 const playerControlsBar = document.getElementById("playerControlsBar");
-const centerControls = document.getElementById("centerControls");
-const playerTopBar = document.getElementById("playerTopBar");
 
 if (hlsScreen) {
     hlsScreen.addEventListener("click", (e) => {
@@ -281,18 +279,9 @@ if (hlsScreen) {
         if (e.target.closest("button") || e.target.closest("input") || e.target.closest("#settingsMenu")) {
             return;
         }
+        // Force hover-like state on mobile by toggling a class
+        hlsScreen.classList.toggle("touch-active-controls");
         
-        // Manual toggle for transparent controls when tapped on screen
-        [playerControlsBar, centerControls, playerTopBar].forEach(el => {
-            if (el) {
-                if (el.style.opacity === "1") {
-                    el.style.opacity = "0";
-                } else {
-                    el.style.opacity = "1";
-                }
-            }
-        });
-
         const menu = document.getElementById("settingsMenu");
         if (menu && menu.classList.contains("show")) {
             menu.classList.remove("show");
@@ -307,7 +296,7 @@ async function downloadMerged() {
     const box = document.getElementById("downloadBox");
     const text = document.getElementById("downloadText");
     const bar = document.getElementById("bar");
-    if (box) box.classList.remove("hidden");
+    if (box) box.classList.add("show");
     if (bar) bar.style.width = "2%";
     if (text) text.textContent = "Preparing video segments...";
 
@@ -353,7 +342,7 @@ async function downloadMerged() {
         a.remove();
         setTimeout(() => URL.revokeObjectURL(finalUrl), 60000);
         if (text) text.textContent = "✅ Download Complete!";
-        setTimeout(() => { if (box) box.classList.add("hidden"); }, 4000);
+        setTimeout(() => { if (box) box.classList.remove("show"); }, 4000);
     } catch (e) {
         if (text) text.textContent = "⚠️ Download error: " + e.message;
     }
@@ -369,25 +358,10 @@ function fmt(x) {
 }
 
 const toggleBtn = document.getElementById("toggle");
-if (toggleBtn) {
-    toggleBtn.onclick = () => {
-        if (v.paused) {
-            v.play();
-            toggleBtn.innerHTML = `<svg fill="white" viewBox="0 0 24 24" width="32" height="32"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`; // Pause Icon
-        } else {
-            v.pause();
-            toggleBtn.innerHTML = `<svg fill="white" viewBox="0 0 24 24" width="32" height="32"><path d="M8 5v14l11-7z"/></svg>`; // Play Icon
-        }
-    };
-}
+if (toggleBtn) toggleBtn.onclick = () => v.paused ? v.play() : v.pause();
 
-v.onplay = () => { 
-    if (toggleBtn) toggleBtn.innerHTML = `<svg fill="white" viewBox="0 0 24 24" width="32" height="32"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`; 
-    showLoader(false); 
-};
-v.onpause = () => { 
-    if (toggleBtn) toggleBtn.innerHTML = `<svg fill="white" viewBox="0 0 24 24" width="32" height="32"><path d="M8 5v14l11-7z"/></svg>`; 
-};
+v.onplay = () => { if (toggleBtn) toggleBtn.textContent = "⏸"; showLoader(false); };
+v.onpause = () => { if (toggleBtn) toggleBtn.textContent = "▶"; };
 v.onwaiting = () => showLoader(true);
 v.onplaying = () => showLoader(false);
 v.oncanplay = () => showLoader(false);
@@ -398,11 +372,24 @@ if (backBtn) backBtn.onclick = () => v.currentTime = Math.max(0, v.currentTime -
 const nextBtn = document.getElementById("next");
 if (nextBtn) nextBtn.onclick = () => v.currentTime = Math.min(v.duration || Infinity, v.currentTime + 10);
 
-// External Download button binding
+const muteBtn = document.getElementById("mute");
+if (muteBtn) muteBtn.onclick = () => {
+    v.muted = !v.muted;
+    muteBtn.textContent = v.muted ? "🔇" : "🔊";
+};
+
 const dlBtn = document.getElementById("download");
 if (dlBtn) dlBtn.onclick = downloadMerged;
 
-// FULLSCREEN LOGIC
+const pipBtn = document.getElementById("pip");
+if (pipBtn) pipBtn.onclick = async () => {
+    try {
+        if (document.pictureInPictureElement) await document.exitPictureInPicture();
+        else if (v.requestPictureInPicture) await v.requestPictureInPicture();
+    } catch {}
+};
+
+// FULLSCREEN & MINIMIZE BUTTON LOGIC
 const fsBtn = document.getElementById("fs");
 
 if (fsBtn && hlsScreen) {
@@ -418,6 +405,7 @@ if (fsBtn && hlsScreen) {
 }
 
 document.addEventListener("fullscreenchange", () => {
+    // The visual UI adjustments for fullscreen are handled smoothly via CSS and Tailwind.
     if (document.fullscreenElement) {
         if (fsBtn) fsBtn.textContent = "🗗";
     } else {
